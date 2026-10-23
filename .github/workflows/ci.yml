@@ -1,0 +1,124 @@
+name: Go CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - '**'
+
+# A run is superseded only on a pull request. On main the group is unique per
+# ref and commit, so no run is ever cancelled: the main run cuts the version
+# tag (strongo/cicd go_bump) and must complete for every merge. The literal
+# `true` below only ever applies to pull_request groups, which are keyed by
+# pull request number.
+#
+# Do not re-run an older main run after a later merge has been tagged: the
+# shared go_bump job tags the highest existing tag plus one onto the commit it
+# runs for, not the newest commit, so the older commit would be tagged last and
+# `go get @latest` would resolve to it.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || format('{0}-{1}', github.ref, github.sha) }}
+  cancel-in-progress: true
+
+jobs:
+  strongo_workflow:
+    # Merges to main are tagged by CI (strongo/cicd go_bump), so a tag must
+    # never be cut for a commit whose real-server run failed: this job, and
+    # with it the reusable workflow's Bump version job, starts only when
+    # `integration` succeeded. A job whose `needs` did not succeed is skipped
+    # unless it carries an always()/failure() condition, which this one
+    # deliberately does not.
+    needs: [integration]
+    permissions:
+      contents: write
+    uses: strongo/cicd/.github/workflows/workflow.yml@main
+    secrets:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    with:
+      cgo_enabled: false
+      code_coverage: true
+      # This job runs without a database, so TestOracleServer skips here; the
+      # unit tests (sqlmock and fake drivers) cover every statement on their
+      # own. Never lower it.
+      min_test_coverage_percent: 100
+
+  # Runs TestOracleServer against a real Oracle Database Free.
+  #
+  # This lives here rather than in strongo/cicd on purpose: service containers
+  # cannot be passed into a reusable workflow by its caller, and `services:`
+  # cannot be made conditional.
+  #
+  # The server image is pinned by the digest of its multi-architecture index
+  # (gvenzl/oracle-free:23-slim, Oracle AI Database 26ai Free 23.26.3, on
+  # 2026-10-16). A bot that updates the digest must also re-run this job.
+  #
+  # LICENCE: the database in this image is Oracle Database Free, used under the
+  # Oracle Free Use Terms and Conditions, which allow development and testing
+  # use. The founder decided on 2026-10-16 (decision D10) that CI may run it for
+  # AUTOMATED TESTING ONLY: the image is pulled and thrown away with the runner;
+  # it is never redistributed, republished or copied into a release. (The
+  # Apache-2.0 label of the gvenzl image covers its build scripts only.)
+  integration:
+    name: Real server (Oracle Database Free)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      oracle:
+        image: gvenzl/oracle-free:23-slim@sha256:6d61d267a3b978c24c5ac1790e62e927416a0aec446bd86e4b3a1527562757bd
+        # The user and password must not be words of the adapter's error text
+        # ("dalgo2oracle: ..."): the test asserts that a refused login names
+        # nothing of the URL, so "dalgo" or "oracle" would fail it vacuously.
+        env:
+          ORACLE_PASSWORD: sys_pw_9
+          APP_USER: scott
+          APP_USER_PASSWORD: tiger9
+        ports:
+          - 1521:1521
+        # healthcheck.sh ships in the gvenzl image: it reports healthy once the
+        # database is open and APP_USER exists.
+        options: >-
+          --health-cmd healthcheck.sh
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 30
+          --health-start-period 30s
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: go test (with a live Oracle)
+        # `go test` prints "ok" for a package whose tests all SKIPPED, so a
+        # green job here would not by itself prove the real-server test ran.
+        # Run verbose and assert on the result lines. -count=1 keeps the test
+        # cache out: a cached package replays the PASS lines of an earlier run.
+        run: |
+          set -o pipefail
+          go test -race -v -count=1 -covermode=atomic -coverprofile=cover.out ./... 2>&1 | tee /tmp/gotest.log
+          if grep -qE '^\s*--- SKIP: TestOracleServer' /tmp/gotest.log; then
+            echo "::error::TestOracleServer SKIPPED - DALGO2ORACLE_TEST_URL did not reach the test"
+            exit 1
+          fi
+          # A PASS line is required for the test and each of its subtests by
+          # name, so one that is renamed, deleted or never reached fails the
+          # job. Add a new subtest to this list.
+          for name in \
+            TestOracleServer \
+            TestOracleServer/ListCollections \
+            TestOracleServer/ListViews \
+            TestOracleServer/DescribeCollection \
+            TestOracleServer/ListIndexes \
+            TestOracleServer/ListConstraints \
+            TestOracleServer/ListReferrers \
+            TestOracleServer/read-only_transaction_refuses_an_INSERT \
+            TestOracleServer/a_refused_login_names_nothing_of_the_URL; do
+            if ! grep -qE "^\s*--- PASS: ${name} \(" /tmp/gotest.log; then
+              echo "::error::${name} did not run to a pass"
+              exit 1
+            fi
+          done
+          awk 'NR > 1 && $3 == 0 { uncovered += $2; print } END { if (uncovered > 0) { print "::error::" uncovered " uncovered statements"; exit 1 } }' cover.out
+        env:
+          DALGO2ORACLE_TEST_URL: oracle://scott:tiger9@localhost:1521/FREEPDB1
