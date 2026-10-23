@@ -40,25 +40,35 @@ func NewConnector(dsn string) driver.Connector {
 }
 
 // withFastLoginOff adds fast login=false to a URL that does not set the option.
-// A string that is not a URL is returned unchanged.
+// The option is found the way go-ora reads it (the decoded key, upper-cased,
+// equal to "FAST LOGIN", nothing trimmed), so a padded or misspelt key does not
+// count as set (go-ora then refuses the URL as an unknown option). The option goes into the query, before any fragment. A string
+// that is not a URL is returned unchanged.
 func withFastLoginOff(dsn string) string {
 	u, err := url.Parse(dsn)
 	if err != nil {
 		return dsn
 	}
 	for key := range u.Query() {
-		if strings.EqualFold(strings.TrimSpace(key), "fast login") {
+		if strings.ToUpper(key) == "FAST LOGIN" {
 			return dsn
 		}
 	}
+	// url.Parse splits the fragment off at the first '#', and so does this.
+	base, fragment, hasFragment := strings.Cut(dsn, "#")
 	const option = "fast+login=false"
 	switch {
-	case strings.HasSuffix(dsn, "?"):
-		return dsn + option
+	case strings.HasSuffix(base, "?"):
+		base += option
 	case u.RawQuery == "":
-		return dsn + "?" + option
+		base += "?" + option
+	default:
+		base += "&" + option
 	}
-	return dsn + "&" + option
+	if hasFragment {
+		return base + "#" + fragment
+	}
+	return base
 }
 
 type connector struct{ inner driver.Connector }

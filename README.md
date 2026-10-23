@@ -82,6 +82,14 @@ log tables. `ListViews` returns the views and materialized views among them.
 and `check`; the check constraints Oracle records for `NOT NULL` columns are
 left out) and `ListReferrers` read the same catalog.
 
+Which schema is read: `ListCollections` and `ListViews` list only the
+configured schema (`WithSchema`, else `CURRENT_SCHEMA`). `DescribeCollection`,
+`ListIndexes`, `ListConstraints` and `ListReferrers` read the schema the
+collection reference names (`dal.CollectionRef.Schema()`), and the configured
+one only when the reference names none. Either way they see only what the
+user's `ALL_*` views show, that is, objects the user owns or has been granted
+access to.
+
 ## Type mapping
 
 | Oracle column type | `dbschema.Type` |
@@ -111,8 +119,9 @@ rolled back afterwards) use it, and so does any `BeginTx` with `ReadOnly` on
 With go-ora's "fast login" on, go-ora v3.0.1 caches a negotiation cookie per
 service, and against Oracle Database 23ai Free every later connection of the
 process ends in EOF, so a pool cannot open a second connection. The connector
-therefore appends `fast login=false` (`fast+login=false`) to the URL unless the
-URL sets the option itself.
+therefore adds `fast login=false` (`fast+login=false`) to the URL's query,
+before any `#fragment`, unless the URL sets the option itself under a key go-ora
+reads (`fast login` in any case, nothing trimmed).
 
 ## Error sanitising
 

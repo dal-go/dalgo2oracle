@@ -10,6 +10,7 @@ import (
 	"syscall"
 	"testing"
 
+	goora "github.com/sijms/go-ora/v3"
 	"github.com/sijms/go-ora/v3/network"
 )
 
@@ -96,9 +97,11 @@ type bareConn struct {
 	stmt     driver.Stmt
 	tx       *fakeTx
 	closeErr error
+	prepared []string
 }
 
-func (c *bareConn) Prepare(string) (driver.Stmt, error) {
+func (c *bareConn) Prepare(q string) (driver.Stmt, error) {
+	c.prepared = append(c.prepared, q)
 	if c.err != nil {
 		return nil, c.err
 	}
@@ -227,6 +230,9 @@ func TestConn_BeginTx(t *testing.T) {
 		if _, err := (&conn{Conn: bc}).BeginTx(ctx, driver.TxOptions{ReadOnly: true}); err != nil {
 			t.Fatal(err)
 		}
+		if len(bc.prepared) != 1 || bc.prepared[0] != setTransactionReadOnly {
+			t.Fatalf("prepared %q, want [%q]", bc.prepared, setTransactionReadOnly)
+		}
 	})
 	t.Run("bare conn prepare fails", func(t *testing.T) {
 		bc := &bareConn{tx: &fakeTx{}}
@@ -237,9 +243,8 @@ func TestConn_BeginTx(t *testing.T) {
 		}
 		_ = tx
 		bc.err = leakyErr
-		if err = c.execNoArgs(ctx, "X"); err == nil {
-			t.Fatal("want error")
-		}
+		err = c.execNoArgs(ctx, "X")
+		assertNoSecret(t, err)
 	})
 	t.Run("bare conn refuses an isolation level", func(t *testing.T) {
 		_, err := (&conn{Conn: &bareConn{}}).BeginTx(ctx, driver.TxOptions{Isolation: 1})
@@ -420,11 +425,46 @@ func TestWithFastLoginOff(t *testing.T) {
 		"oracle://u:p@h:1521/S?TIMEOUT=5":         "oracle://u:p@h:1521/S?TIMEOUT=5&fast+login=false",
 		"oracle://u:p@h:1521/S?FAST%20LOGIN=true": "oracle://u:p@h:1521/S?FAST%20LOGIN=true",
 		"oracle://u:p@h:1521/S?fast+login=enable": "oracle://u:p@h:1521/S?fast+login=enable",
-		"oracle://u:p@h:bad port/S":               "oracle://u:p@h:bad port/S",
+		// go-ora does not trim the key, so a padded one leaves fast login unset.
+		"oracle://u:p@h:1521/S?%20fast+login=true": "oracle://u:p@h:1521/S?%20fast+login=true&fast+login=false",
+		"oracle://u:p@h:1521/S?fast+login+=true":   "oracle://u:p@h:1521/S?fast+login+=true&fast+login=false",
+		// The option goes into the query, before the fragment.
+		"oracle://u:p@h:1521/S#x":           "oracle://u:p@h:1521/S?fast+login=false#x",
+		"oracle://u:p@h:1521/S?#x":          "oracle://u:p@h:1521/S?fast+login=false#x",
+		"oracle://u:p@h:1521/S?TIMEOUT=5#x": "oracle://u:p@h:1521/S?TIMEOUT=5&fast+login=false#x",
+		"oracle://u:p@h:1521/S?a=1#y?b#z":   "oracle://u:p@h:1521/S?a=1&fast+login=false#y?b#z",
+		"oracle://u:p@h:bad port/S":         "oracle://u:p@h:bad port/S",
 	}
 	for in, want := range cases {
 		if got := withFastLoginOff(in); got != want {
 			t.Errorf("withFastLoginOff(%q) = %q, want %q", in, got, want)
 		}
+	}
+}
+
+// TestWithFastLoginOff_AsGoOraReadsIt checks the result through go-ora's own
+// parser: fast login is off unless the caller's URL turns it on in a key go-ora
+// reads. go-ora refuses a key it does not know, such as a padded " fast login",
+// so such a URL never connects with fast login on either.
+func TestWithFastLoginOff_AsGoOraReadsIt(t *testing.T) {
+	cases := map[string]bool{
+		"oracle://u:p@h:1521/S":                   false,
+		"oracle://u:p@h:1521/S?TIMEOUT=5":         false,
+		"oracle://u:p@h:1521/S#x":                 false,
+		"oracle://u:p@h:1521/S?TIMEOUT=5#x":       false,
+		"oracle://u:p@h:1521/S?FAST%20LOGIN=true": true,
+		"oracle://u:p@h:1521/S?fast+login=false":  false,
+	}
+	for in, want := range cases {
+		cfg, err := goora.ParseConfig(withFastLoginOff(in))
+		if err != nil {
+			t.Fatalf("%q: %v", in, err)
+		}
+		if cfg.FastLogin != want {
+			t.Errorf("%q: go-ora reads fast login = %v, want %v", in, cfg.FastLogin, want)
+		}
+	}
+	if _, err := goora.ParseConfig(withFastLoginOff("oracle://u:p@h:1521/S?%20fast+login=true")); err == nil {
+		t.Error("go-ora accepts a padded fast login key")
 	}
 }
