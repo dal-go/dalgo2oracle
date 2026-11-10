@@ -2,5 +2,61 @@
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": [
     "config:recommended"
+  ],
+  "automerge": false,
+  "automergeType": "pr",
+  "platformAutomerge": true,
+  "prConcurrentLimit": 3,
+  "packageRules": [
+    {
+      "description": "Batch compatible Go test dependency updates behind the required checks",
+      "matchManagers": [
+        "gomod"
+      ],
+      "matchPackageNames": [
+        "github.com/DATA-DOG/go-sqlmock",
+        "github.com/stretchr/testify"
+      ],
+      "matchUpdateTypes": [
+        "minor",
+        "patch"
+      ],
+      "groupName": "Go test dependencies",
+      "automerge": true
+    },
+    {
+      "description": "Review major upgrades in the dashboard before opening a PR",
+      "matchUpdateTypes": [
+        "major"
+      ],
+      "dependencyDashboardApproval": true
+    },
+    {
+      "description": "Keep TypeScript below 7 until Angular and Ionic tooling is compatible",
+      "matchPackageNames": [
+        "typescript"
+      ],
+      "allowedVersions": "<7"
+    },
+    {
+      "description": "Update the SHA-pinned first-party CI workflow for compatible patch releases",
+      "matchManagers": [
+        "github-actions"
+      ],
+      "matchDepTypes": [
+        "workflow"
+      ],
+      "matchPackageNames": [
+        "strongo/cicd"
+      ],
+      "matchFileNames": [
+        ".github/workflows/ci.yml"
+      ],
+      "matchUpdateTypes": [
+        "patch"
+      ],
+      "pinDigests": true,
+      "automerge": true
+    }
   ]
 }
