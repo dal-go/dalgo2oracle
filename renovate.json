@@ -44,6 +44,7 @@
         "github-actions"
       ],
       "matchDepTypes": [
+        "action",
         "workflow"
       ],
       "matchPackageNames": [
@@ -56,6 +57,26 @@
         "patch"
       ],
       "pinDigests": true,
+      "automerge": true
+    },
+    {
+      "description": "Automerge official Go compiler patch releases without changing the module's minimum Go version",
+      "matchManagers": [
+        "gomod"
+      ],
+      "matchDatasources": [
+        "golang-version"
+      ],
+      "matchDepTypes": [
+        "toolchain"
+      ],
+      "matchPackageNames": [
+        "go"
+      ],
+      "matchUpdateTypes": [
+        "patch"
+      ],
+      "groupName": "Go toolchain patches",
       "automerge": true
     }
   ]
