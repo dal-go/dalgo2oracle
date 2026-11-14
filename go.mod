@@ -6,8 +6,8 @@ toolchain go1.27.4
 
 require (
 	github.com/DATA-DOG/go-sqlmock v1.5.2
-	github.com/dal-go/dalgo v0.102.2
-	github.com/dal-go/dalgo2sql v0.32.3
+	github.com/dal-go/dalgo v0.102.4
+	github.com/dal-go/dalgo2sql v0.32.5
 	github.com/dal-go/record v0.1.5
 	github.com/sijms/go-ora/v3 v3.0.1
 )
