@@ -66,7 +66,7 @@ jobs:
     timeout-minutes: 30
     services:
       oracle:
-        image: gvenzl/oracle-free:23-slim@sha256:6d61d267a3b978c24c5ac1790e62e927416a0aec446bd86e4b3a1527562757bd
+        image: gvenzl/oracle-free:23-slim@sha256:48a3d9db7fa7c2a2fdbdf5fff7502c93e807349a2d625718fe61668cc3daa844
         # The user and password must not be words of the adapter's error text
         # ("dalgo2oracle: ..."): the test asserts that a refused login names
         # nothing of the URL, so "dalgo" or "oracle" would fail it vacuously.
