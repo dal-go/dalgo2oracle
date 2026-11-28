@@ -24,6 +24,8 @@ github.com/dal-go/dalgo2sql v0.32.6 h1:lzXBT3ec/Lb1qY9M8XjC34bQuZO1Aff7SebnKYSC+
 github.com/dal-go/dalgo2sql v0.32.6/go.mod h1:G47cZezueLCXeb+Us0EeO4ZFjrvwZMbWHOToLJNrvbQ=
 github.com/dal-go/dalgo2sql v0.32.7 h1:LbPAdJvx4ggaIM5OCYUT8njDP1fZkxfC1nTfPyBFCPk=
 github.com/dal-go/dalgo2sql v0.32.7/go.mod h1:Z7Z9Cq3y8hUoUTU1JDztRftfqvmJ7vwXJZSxRXyJQ4c=
+github.com/dal-go/dalgo2sql v0.32.8 h1:up6pCRLDG7Q/OwN5Xh7c8JS68wia6TC24hLdO5PcM5k=
+github.com/dal-go/dalgo2sql v0.32.8/go.mod h1:Z7Z9Cq3y8hUoUTU1JDztRftfqvmJ7vwXJZSxRXyJQ4c=
 github.com/dal-go/record v0.1.5 h1:lkPxiJA7S2oE5tA0WUayezd+lmaiEekrEcGz/HRhzLg=
 github.com/dal-go/record v0.1.5/go.mod h1:PuoOCH74/Vf+pIVWSdrMg7OdUmlSlPgj68yJ+gM42To=
 github.com/dustin/go-humanize v1.1.0 h1:dbKTrvD0klcbBV/h4AWJdMuZogJACoMlvWIWZ5b2xWg=
